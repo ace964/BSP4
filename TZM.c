@@ -11,6 +11,9 @@
 #include <linux/fs.h>             // Header for the Linux file system support
 #include <asm/uaccess.h>          // Required for the copy to user function
 #include <linux/mutex.h>          // Mutex
+#include <linux/jiffies.h>
+#include <linux/math64.h>
+
 #define  DEV_NAME "tzm"    ///< The device will appear at /dev/charDriver using this value
 #define  CLASS_NAME  "charDriver"        ///< The device class -- this is a character device driver
 
@@ -20,12 +23,15 @@ MODULE_DESCRIPTION("Ein Linux treiber, der Char-Eingaben verarbeitet");
 
 
 static DEFINE_MUTEX(lock_mutex);
+static DEFINE_MUTEX(io_mutex);
 static int    majorNumber;                  ///< Stores the device number -- determined automatically
 static char   message[256] = {0};           ///< Memory for the string that is passed from userspace
 static short  size_of_message;              ///< Used to remember the size of the string stored
 static struct class*  charDriverClass  = NULL; ///< The device-driver class struct pointer
 static struct device* charDriverDevice = NULL; ///< The device-driver device struct pointer
 
+u64 last_newline = 0;
+int char_count = 0;
 // The prototype functions for the character driver -- must come before the struct definition
 static int     dev_open(struct inode *, struct file *);
 static int     dev_release(struct inode *, struct file *);
@@ -49,7 +55,7 @@ static struct file_operations fops =
  *  time and that it can be discarded and its memory freed up after that point.
  *  @return returns 0 if successful
  */
-static int __init charDriver_init(void){
+static int __init dev_init(void){
    printk(KERN_INFO "charDriver: Initializing the charDriver LKM\n");
 
    // Try to dynamically allocate a major number for the device -- more difficult but worth it
@@ -85,7 +91,7 @@ static int __init charDriver_init(void){
  *  Similar to the initialization function, it is static. The __exit macro notifies that if this
  *  code is used for a built-in driver (not a LKM) that this function is not required.
  */
-static void __exit charDriver_exit(void){
+static void __exit dev_exit(void){
    device_destroy(charDriverClass, MKDEV(majorNumber, 0));     // remove the device
    class_unregister(charDriverClass);                          // unregister the device class
    class_destroy(charDriverClass);                             // remove the device class
@@ -98,14 +104,15 @@ static void __exit charDriver_exit(void){
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_open(struct inode *inodep, struct file *filep){
-    int mutexLocked = mutex_is_locked(&lock_mutex);
-    if (mutexLocked) {
-        mutex_lock(&lock_mutex);
-        printk(KERN_INFO "charDriver: Device has been opened\n");
-        return 0;
+    int locked = mutex_lock_trylock(&lock_mutex);
+    if (locked) {
+        printk(KERN_INFO "Device Could not be opened. Already Opened\n");
+        return -EBUSY;
     } else {
-        printk(KERN_INFO "charDriver: Device Could not be opened. Already Opened\n");
-        return -1;
+		char_count = 0;
+		last_newline = 0;
+        printk(KERN_INFO "Opened\n");
+        return 0;
     }
 }
 
@@ -141,10 +148,20 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
  *  @param offset The offset if required
  */
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
-   sprintf(message, "%s(%zu letters)", buffer, len);   // appending received string with its length
-   size_of_message = strlen(message);                 // store the length of the stored message
-   printk(KERN_INFO "charDriver: Received %zu characters from the user\n", len);
-   return len;
+	
+	for(int i = 0; i < len; i++)
+	{
+		char_count++;
+		if(buffer[i] == '\n')
+		{
+			last_newline = get_jiffies_64();
+		}
+	}
+	
+    sprintf(message, "charcount: %d LineTime: %d", char_count, get_jiffies_64() - last_newline);   // appending received string with its length
+    size_of_message = strlen(message);                 // store the length of the stored message
+    printk(KERN_INFO "charDriver: Received %zu characters from the user\n", len);
+    return len;
 }
 
 /** @brief The device release function that is called whenever the device is closed/released by
@@ -153,8 +170,8 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_release(struct inode *inodep, struct file *filep){
-    mutex_unlock(&lock_mutex);
-   printk(KERN_INFO "charDriver: Device successfully closed\n");
+   mutex_unlock(&lock_mutex);
+   printk(KERN_INFO "Device successfully closed\n");
    return 0;
 }
 
