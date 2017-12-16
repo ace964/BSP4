@@ -158,7 +158,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 		}
 	}
 	
-    sprintf(message, "charcount: %d LineTime: %d", char_count, get_jiffies_64() - last_newline);   // appending received string with its length
+  // appending received string with its length
     size_of_message = strlen(message);                 // store the length of the stored message
     printk(KERN_INFO "charDriver: Received %zu characters from the user\n", len);
     return len;
