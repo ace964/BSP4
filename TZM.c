@@ -14,9 +14,6 @@
 #include <linux/jiffies.h>
 #include <linux/math64.h>
 
-#define  DEV_NAME "tzm"    ///< The device will appear at /dev/charDriver using this value
-#define  CLASS_NAME  "charDriver"        ///< The device class -- this is a character device driver
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Frederic Dlugi and Maximilian Mang");
 MODULE_DESCRIPTION("Ein Linux treiber, der Char-Eingaben verarbeitet");  
@@ -44,9 +41,10 @@ static int     dev_open(struct inode *, struct file *);
 static int     dev_release(struct inode *, struct file *);
 static ssize_t dev_read(struct file *, char *, size_t, loff_t *);
 static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
-/** @brief Devices are represented as file structure in the kernel. The file_operations structure from
- *  /linux/fs.h lists the callback functions that you wish to associated with your file operations
- *  using a C99 syntax structure. char devices usually implement open, read, write and release calls
+
+
+/** 
+ * 
  */
 static struct file_operations fops =
 {
@@ -56,41 +54,13 @@ static struct file_operations fops =
    .release = dev_release,
 };
 
-/** @brief The LKM initialization function
- *  The static keyword restricts the visibility of the function to within this C file. The __init
- *  macro means that for a built-in driver (not a LKM) the function is only used at initialization
- *  time and that it can be discarded and its memory freed up after that point.
- *  @return returns 0 if successful
+/** 
+ * 
  */
 static int __init dev_init(void){
-   printk(KERN_INFO "charDriver: Initializing the charDriver LKM\n");
+   
 
-   // Try to dynamically allocate a major number for the device -- more difficult but worth it
-   majorNumber = register_chrdev(0, DEV_NAME, &fops);
-   if (majorNumber<0){
-      printk(KERN_ALERT "charDriver failed to register a major number\n");
-      return majorNumber;
-   }
-   printk(KERN_INFO "charDriver: registered correctly with major number %d\n", majorNumber);
-
-   // Register the device class
-   charDriverClass = class_create(THIS_MODULE, CLASS_NAME);
-   if (IS_ERR(charDriverClass)){                // Check for error and clean up if there is
-      unregister_chrdev(majorNumber, DEV_NAME);
-      printk(KERN_ALERT "Failed to register device class\n");
-      return PTR_ERR(charDriverClass);          // Correct way to return an error on a pointer
-   }
-   printk(KERN_INFO "charDriver: device class registered correctly\n");
-
-   // Register the device driver
-   charDriverDevice = device_create(charDriverClass, NULL, MKDEV(majorNumber, 0), NULL, DEV_NAME);
-   if (IS_ERR(charDriverDevice)){               // Clean up if there is an error
-      class_destroy(charDriverClass);           // Repeated code but the alternative is goto statements
-      unregister_chrdev(majorNumber, DEV_NAME);
-      printk(KERN_ALERT "Failed to create the device\n");
-      return PTR_ERR(charDriverDevice);
-   }
-   printk(KERN_INFO "charDriver: device class created correctly\n"); // Made it! device was initialized
+   
    return 0;
 }
 
