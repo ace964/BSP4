@@ -104,7 +104,7 @@ static void __exit dev_exit(void){
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_open(struct inode *inodep, struct file *filep){
-    int locked = mutex_lock_trylock(&lock_mutex);
+    int locked = mutex_trylock(&lock_mutex);
     if (locked) {
         printk(KERN_INFO "Device Could not be opened. Already Opened\n");
         return -EBUSY;
@@ -148,8 +148,8 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
  *  @param offset The offset if required
  */
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
-	
-	for(int i = 0; i < len; i++)
+	int i;
+	for(i = 0; i < len; i++)
 	{
 		char_count++;
 		if(buffer[i] == '\n')
@@ -179,5 +179,5 @@ static int dev_release(struct inode *inodep, struct file *filep){
  *  identify the initialization function at insertion time and the cleanup function (as
  *  listed above)
  */
-module_init(charDriver_init);
-module_exit(charDriver_exit);
+module_init(dev_init);
+module_exit(dev_exit);
