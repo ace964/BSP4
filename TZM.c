@@ -30,8 +30,15 @@ static short  size_of_message;              ///< Used to remember the size of th
 static struct class*  charDriverClass  = NULL; ///< The device-driver class struct pointer
 static struct device* charDriverDevice = NULL; ///< The device-driver device struct pointer
 
-u64 last_newline = 0;
-int char_count = 0;
+u64 ret_val_time = 0;
+int ret_val_number = 0;
+
+module_param(ret_val_time, u64, S_IRUGO);
+MODULE_PARM_DESC(ret_val_time, "Zeit zwischen zwei newlines, wenn keine Messung bekannt ist");
+module_param(ret_val_number, int, S_IRUGO);
+MODULE_PARM_DESC(ret_val_number, "Laenge zwischen zwei newline, wenn keine Messung bekannt ist");
+
+
 // The prototype functions for the character driver -- must come before the struct definition
 static int     dev_open(struct inode *, struct file *);
 static int     dev_release(struct inode *, struct file *);
@@ -109,8 +116,8 @@ static int dev_open(struct inode *inodep, struct file *filep){
         printk(KERN_INFO "Device Could not be opened. Already Opened\n");
         return -EBUSY;
     } else {
-		char_count = 0;
-		last_newline = 0;
+		ret_val_number = 0;
+		ret_val_time = 0;
         printk(KERN_INFO "Opened\n");
         return 0;
     }
@@ -151,10 +158,10 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 	int i;
 	for(i = 0; i < len; i++)
 	{
-		char_count++;
+		ret_val_number++;
 		if(buffer[i] == '\n')
 		{
-			last_newline = get_jiffies_64();
+			ret_val_time = get_jiffies_64();
 		}
 	}
 	
