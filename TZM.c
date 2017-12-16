@@ -54,19 +54,27 @@ static struct file_operations fops =
 /** 
  * 
  */
-static int __init dev_init(void){
-   
-
-   
-   return 0;
+dev_t dev_number;
+struct cdev *driver_object;
+static int __init dev_init(void)
+{
+	alloc_chrdev_region(&dev_number, 0, 1, "tzm");
+	driver_object = cdev_alloc();
+    driver_object->ops = &fops;
+    driver_object->owner = "tzm";
+	cdev_add(driver_object, dev_number, 1);
+    return 0;
 }
 
 /** @brief The LKM cleanup function
  *  Similar to the initialization function, it is static. The __exit macro notifies that if this
  *  code is used for a built-in driver (not a LKM) that this function is not required.
  */
-static void __exit dev_exit(void){
-     
+static void __exit dev_exit(void)
+{
+    cdev_del(driver_object);
+	unregister_chrdev_region(dev_number, 1);
+    printk(KERN_INFO "charDriver: Goodbye from the LKM!\n");
 }
 
 /** @brief The device open function that is called each time the device is opened
@@ -96,6 +104,7 @@ static int dev_open(struct inode *inodep, struct file *filep){
  */
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset){
    int error_count = 0;
+   sprintf(message,"ret_val_number=%d ret_val_time=%d",ret_val_number, ret_val_time);
    // copy_to_user has the format ( * to, *from, size) and returns 0 on success
    error_count = copy_to_user(buffer, message, size_of_message);
 
