@@ -21,16 +21,13 @@ MODULE_DESCRIPTION("Ein Linux treiber, der Char-Eingaben verarbeitet");
 
 static DEFINE_MUTEX(lock_mutex);
 static DEFINE_MUTEX(io_mutex);
-static int    majorNumber;                  ///< Stores the device number -- determined automatically
 static char   message[256] = {0};           ///< Memory for the string that is passed from userspace
 static short  size_of_message;              ///< Used to remember the size of the string stored
-static struct class*  charDriverClass  = NULL; ///< The device-driver class struct pointer
-static struct device* charDriverDevice = NULL; ///< The device-driver device struct pointer
 
-u64 ret_val_time = 0;
+unsigned long ret_val_time = 0;
 int ret_val_number = 0;
 
-module_param(ret_val_time, u64, S_IRUGO);
+module_param(ret_val_time, long, S_IRUGO);
 MODULE_PARM_DESC(ret_val_time, "Zeit zwischen zwei newlines, wenn keine Messung bekannt ist");
 module_param(ret_val_number, int, S_IRUGO);
 MODULE_PARM_DESC(ret_val_number, "Laenge zwischen zwei newline, wenn keine Messung bekannt ist");
@@ -69,11 +66,7 @@ static int __init dev_init(void){
  *  code is used for a built-in driver (not a LKM) that this function is not required.
  */
 static void __exit dev_exit(void){
-   device_destroy(charDriverClass, MKDEV(majorNumber, 0));     // remove the device
-   class_unregister(charDriverClass);                          // unregister the device class
-   class_destroy(charDriverClass);                             // remove the device class
-   unregister_chrdev(majorNumber, DEV_NAME);             // unregister the major number
-   printk(KERN_INFO "charDriver: Goodbye from the LKM!\n");
+     
 }
 
 /** @brief The device open function that is called each time the device is opened
