@@ -20,13 +20,13 @@ MODULE_DESCRIPTION("Ein Linux treiber, der Char-Eingaben verarbeitet");
 
 
 static DEFINE_MUTEX(lock_mutex);
-static DEFINE_MUTEX(io_mutex);
 static char   message[256] = {0};           ///< Memory for the string that is passed from userspace
 static short  size_of_message;              ///< Used to remember the size of the string stored
 
 unsigned long ret_val_time = 0;
+unsigned long time_since_last_newline = 0;
 int ret_val_number = 0;
-
+int dev_open = 0;
 module_param(ret_val_time, long, S_IRUGO);
 MODULE_PARM_DESC(ret_val_time, "Zeit zwischen zwei newlines, wenn keine Messung bekannt ist");
 module_param(ret_val_number, int, S_IRUGO);
@@ -82,16 +82,22 @@ static void __exit dev_exit(void)
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_open(struct inode *inodep, struct file *filep){
-    int locked = mutex_trylock(&lock_mutex);
-    if (locked) {
+    if (mutex_lock_interruptible(&lock_mutex)) 
+	{
         printk(KERN_INFO "Device Could not be opened. Already Opened\n");
         return -EBUSY;
-    } else {
-		ret_val_number = 0;
-		ret_val_time = 0;
-        printk(KERN_INFO "Opened\n");
-        return 0;
     }
+	if(dev_open)
+	{
+		return -EBUSY;
+	}
+	
+	dev_open = 1;
+	ret_val_number = 0;
+	ret_val_time = 0;
+    printk(KERN_INFO "Opened\n");
+	mutex_unlock(&lock_mutex);
+    return 0;
 }
 
 /** @brief This function is called whenever device is being read from user space i.e. data is
@@ -103,19 +109,25 @@ static int dev_open(struct inode *inodep, struct file *filep){
  *  @param offset The offset if required
  */
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset){
-   int error_count = 0;
-   sprintf(message,"ret_val_number=%d ret_val_time=%d",ret_val_number, ret_val_time);
-   // copy_to_user has the format ( * to, *from, size) and returns 0 on success
-   error_count = copy_to_user(buffer, message, size_of_message);
+	if(mutex_lock_interruptible(&lock_mutex))
+        return 0; // nothing read
 
-   if (error_count==0){            // if true then have success
-      printk(KERN_INFO "charDriver: Sent %d characters to the user\n", size_of_message);
-      return (size_of_message=0);  // clear the position to the start and return 0
-   }
-   else {
-      printk(KERN_INFO "charDriver: Failed to send %d characters to the user\n", error_count);
-      return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
-   }
+	
+	int error_count = 0;
+	// copy_to_user has the format ( * to, *from, size) and returns 0 on success
+	error_count = copy_to_user(buffer, message, size_of_message);
+
+	if (error_count==0){            // if true then have success
+		printk(KERN_INFO "charDriver: Sent %d characters to the user\n", size_of_message);
+		mutex_unlock(&access_mutex);
+		return (size_of_message=0);  // clear the position to the start and return 0
+	}
+	else {
+		printk(KERN_INFO "charDriver: Failed to send %d characters to the user\n", error_count);
+		mutex_unlock(&access_mutex);
+		return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
+	}
+	
 }
 
 /** @brief This function is called whenever the device is being written to from user space i.e.
@@ -127,19 +139,30 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
  *  @param offset The offset if required
  */
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
+	
+	if(mutex_lock_interruptible(&lock_mutex))
+        return 0; // nothing copied
+	
+	
 	int i;
 	for(i = 0; i < len; i++)
 	{
 		ret_val_number++;
 		if(buffer[i] == '\n')
 		{
+			if(ret_val_time != -1)
+			{
+				time_since_last_newline = get_jiffies_64() - ret_val_time;
+			}
 			ret_val_time = get_jiffies_64();
 		}
 	}
 	
-  // appending received string with its length
+	sprintf(message,"Time =%d Chars=%d",time_since_last_newline, ret_val_number);
+	// appending received string with its length
     size_of_message = strlen(message);                 // store the length of the stored message
     printk(KERN_INFO "charDriver: Received %zu characters from the user\n", len);
+	mutex_unlock(&lock_mutex);
     return len;
 }
 
@@ -149,9 +172,14 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_release(struct inode *inodep, struct file *filep){
-   mutex_unlock(&lock_mutex);
-   printk(KERN_INFO "Device successfully closed\n");
-   return 0;
+	if (mutex_lock_interruptible(&lock_mutex)) 
+	{
+        return -EBUSY;
+    }
+	dev_open = 0;
+	mutex_unlock(&lock_mutex);
+	printk(KERN_INFO "Device successfully closed\n");
+	return 0;
 }
 
 /** @brief A module must use the module_init() module_exit() macros from linux/init.h, which
