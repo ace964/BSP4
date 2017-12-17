@@ -69,9 +69,8 @@ static int __init dev_init(void)
     return 0;
 }
 
-/** @brief The LKM cleanup function
- *  Similar to the initialization function, it is static. The __exit macro notifies that if this
- *  code is used for a built-in driver (not a LKM) that this function is not required.
+/** 
+ * 
  */
 static void __exit dev_exit(void)
 {
@@ -80,9 +79,8 @@ static void __exit dev_exit(void)
     printk(KERN_INFO "charDriver: Goodbye from the LKM!\n");
 }
 
-/** @brief The device open function that is called each time the device is opened
- *  @param inodep A pointer to an inode object (defined in linux/fs.h)
- *  @param filep A pointer to a file object (defined in linux/fs.h)
+/** 
+ * 
  */
 static int dev_open(struct inode *inodep, struct file *filep){
     if (mutex_lock_interruptible(&lock_mutex)) 
@@ -102,13 +100,8 @@ static int dev_open(struct inode *inodep, struct file *filep){
     return 0;
 }
 
-/** @brief This function is called whenever device is being read from user space i.e. data is
- *  being sent from the device to the user. In this case is uses the copy_to_user() function to
- *  send the buffer string to the user and captures any errors.
- *  @param filep A pointer to a file object (defined in linux/fs.h)
- *  @param buffer The pointer to the buffer to which this function writes the data
- *  @param len The length of the b
- *  @param offset The offset if required
+/** 
+ * 
  */
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset){
 	int error_count = 0;
@@ -123,7 +116,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 	if (error_count == 0){            // if true then have success
 		printk(KERN_INFO "charDriver: Sent %d characters to the user\n", size_of_message);
 		mutex_unlock(&lock_mutex);
-		return (size_of_message=0);  // clear the position to the start and return 0
+		return (size_of_message);  // clear the position to the start and return 0
 	}
 	else {
 		printk(KERN_INFO "charDriver: Failed to send %d characters to the user\n", error_count);
@@ -133,13 +126,8 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 	
 }
 
-/** @brief This function is called whenever the device is being written to from user space i.e.
- *  data is sent to the device from the user. The data is copied to the message[] array in this
- *  LKM using the sprintf() function along with the length of the string.
- *  @param filep A pointer to a file object
- *  @param buffer The buffer to that contains the string to write to the device
- *  @param len The length of the array of data that is being passed in the const char buffer
- *  @param offset The offset if required
+/**
+ * 
  */
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
 	int i; // Initialized at top because of 
@@ -161,7 +149,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 		}
 	}
 	
-	sprintf(message,"Time =%lu Chars=%d",time_since_last_newline, ret_val_number);
+	sprintf(message,"Time =%lu Chars=%d \n",time_since_last_newline, ret_val_number);
 	// appending received string with its length
     size_of_message = strlen(message);                 // store the length of the stored message
     printk(KERN_INFO "charDriver: Received %zu characters from the user\n", len);
@@ -169,10 +157,8 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
     return len;
 }
 
-/** @brief The device release function that is called whenever the device is closed/released by
- *  the userspace program
- *  @param inodep A pointer to an inode object (defined in linux/fs.h)
- *  @param filep A pointer to a file object (defined in linux/fs.h)
+/** 
+ * 
  */
 static int dev_release(struct inode *inodep, struct file *filep){
 	if (mutex_lock_interruptible(&lock_mutex)) 
@@ -185,9 +171,8 @@ static int dev_release(struct inode *inodep, struct file *filep){
 	return 0;
 }
 
-/** @brief A module must use the module_init() module_exit() macros from linux/init.h, which
- *  identify the initialization function at insertion time and the cleanup function (as
- *  listed above)
+/** 
+ * 
  */
 module_init(dev_init);
 module_exit(dev_exit);
