@@ -25,9 +25,9 @@ static DEFINE_MUTEX(lock_mutex);
 static char   message[256] = {0};           ///< Memory for the string that is passed from userspace
 static short  size_of_message;              ///< Used to remember the size of the string stored
 
-unsigned long ret_val_time = 0;
-unsigned long timeStampOfLastNL = 0;
-int ret_val_number = 0;
+unsigned long ret_val_time = -1;
+unsigned long timeStampOfLastNL = 0; //holding timeStampOfLastNL
+int ret_val_number = -1;
 module_param(ret_val_time, long, S_IRUGO);
 MODULE_PARM_DESC(ret_val_time, "Zeit zwischen zwei newlines, wenn keine Messung bekannt ist");
 module_param(ret_val_number, int, S_IRUGO);
@@ -97,8 +97,6 @@ static int dev_open(struct inode *inodep, struct file *filep){
     }
     
     isOpen = true;
-	ret_val_number = 0;
-	ret_val_time = 0;
 	mutex_unlock(&lock_mutex);
     return 0;
 }
@@ -114,6 +112,8 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
         return 0; // nothing read
 	
 	// copy_to_user has the format ( * to, *from, size) and returns 0 on success
+	sprintf(message,"Time =%lu Chars=%d \n",ret_val_time, ret_val_number);
+    size_of_message = strlen(message);                 // store the length of the stored message
 	error_count = copy_to_user(buffer, message, size_of_message);
 
 	if (error_count == 0){            // if true then have success
@@ -151,9 +151,6 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 			timeStampOfLastNL = get_jiffies_64();
 		}
 	}
-	
-	sprintf(message,"Time =%lu Chars=%d \n",ret_val_time, ret_val_number);
-    size_of_message = strlen(message);                 // store the length of the stored message
 	mutex_unlock(&lock_mutex);
     return len;
 }
