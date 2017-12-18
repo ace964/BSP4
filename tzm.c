@@ -26,7 +26,7 @@ static char   message[256] = {0};           ///< Memory for the string that is p
 static short  size_of_message;              ///< Used to remember the size of the string stored
 
 unsigned long ret_val_time = 0;
-unsigned long time_since_last_newline = 0;
+unsigned long timeStampOfLastNL = 0;
 int ret_val_number = 0;
 module_param(ret_val_time, long, S_IRUGO);
 MODULE_PARM_DESC(ret_val_time, "Zeit zwischen zwei newlines, wenn keine Messung bekannt ist");
@@ -144,15 +144,15 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 		ret_val_number++;
 		if(buffer[i] == '\n')
 		{
-			if(ret_val_time != -1)
+			if(timeStampOfLastNL != -1)
 			{
-				time_since_last_newline = get_jiffies_64() - ret_val_time;
+				ret_val_time = get_jiffies_64() - timeStampOfLastNL;
 			}
-			ret_val_time = get_jiffies_64();
+			timeStampOfLastNL = get_jiffies_64();
 		}
 	}
 	
-	sprintf(message,"Time =%lu Chars=%d \n",time_since_last_newline, ret_val_number);
+	sprintf(message,"Time =%lu Chars=%d \n",ret_val_time, ret_val_number);
     size_of_message = strlen(message);                 // store the length of the stored message
 	mutex_unlock(&lock_mutex);
     return len;
