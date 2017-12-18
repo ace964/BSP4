@@ -28,6 +28,7 @@ static short  size_of_message;              ///< Used to remember the size of th
 unsigned long ret_val_time = -1;
 unsigned long timeStampOfLastNL = 0; //holding timeStampOfLastNL
 int ret_val_number = -1;
+int currentNumberOfChars =0;
 module_param(ret_val_time, long, S_IRUGO);
 MODULE_PARM_DESC(ret_val_time, "Zeit zwischen zwei newlines, wenn keine Messung bekannt ist");
 module_param(ret_val_number, int, S_IRUGO);
@@ -141,7 +142,6 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 	
 	for(i = 0; i < len; i++)
 	{
-		ret_val_number++;
 		if(buffer[i] == '\n')
 		{
 			if(timeStampOfLastNL != -1)
@@ -149,7 +149,11 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 				ret_val_time = get_jiffies_64() - timeStampOfLastNL;
 			}
 			timeStampOfLastNL = get_jiffies_64();
-		}
+            ret_val_number = currentNumberOfChars;
+            currentNumberOfChars = 0;
+		} else {
+            currentNumberOfChars++; // Only add to counter if not \n   
+        }
 	}
 	mutex_unlock(&lock_mutex);
     return len;
