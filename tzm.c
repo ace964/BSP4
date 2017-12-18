@@ -1,5 +1,5 @@
 /**
- * @file   charDriver.c
+ * @file   tzm.c
  * @author Frederic Dlugi and Maximilian Mang
  * @date   16.12.2017
  */
@@ -44,7 +44,7 @@ static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
 
 
 /** 
- * 
+ * Map the method pointer to file_operations struct
  */
 static struct file_operations fops =
 {
@@ -55,7 +55,10 @@ static struct file_operations fops =
 };
 
 /** 
- * 
+ * Init method for driver 
+ * allocates a dev_number in the kernel
+ * allocates a driverobject and sets ops and owner.
+ * Adds driver to kernel.
  */
 dev_t dev_number;
 struct cdev *driver_object;
@@ -70,56 +73,54 @@ static int __init dev_init(void)
 }
 
 /** 
- * 
+ * deletes driver object and unregisters dev number.
  */
 static void __exit dev_exit(void)
 {
     cdev_del(driver_object);
 	unregister_chrdev_region(dev_number, 1);
-    printk(KERN_INFO "charDriver: Goodbye from the LKM!\n");
 }
 
 /** 
- * 
+ * Opens the driver device.
+ * @return
+ * 0 if successfull and -EBUSY if not successfull.
  */
 static int dev_open(struct inode *inodep, struct file *filep){
     if (mutex_lock_interruptible(&lock_mutex)) 
 	{
-        printk(KERN_INFO "Device Could not be opened. Already Opened\n");
         return -EBUSY;
     }
-    if(isOpen){
+    if(isOpen)
+	{
         return -EBUSY;
     }
     
     isOpen = true;
 	ret_val_number = 0;
 	ret_val_time = 0;
-    printk(KERN_INFO "Opened\n");
 	mutex_unlock(&lock_mutex);
     return 0;
 }
 
 /** 
- * 
+ * Reads the current status of the driver.
+ * @return
+ * the length of the copied message
  */
 static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *offset){
 	int error_count = 0;
     if(mutex_lock_interruptible(&lock_mutex))
         return 0; // nothing read
-
-	
 	
 	// copy_to_user has the format ( * to, *from, size) and returns 0 on success
 	error_count = copy_to_user(buffer, message, size_of_message);
 
 	if (error_count == 0){            // if true then have success
-		printk(KERN_INFO "charDriver: Sent %d characters to the user\n", size_of_message);
 		mutex_unlock(&lock_mutex);
-		return (size_of_message);  // clear the position to the start and return 0
+		return (size_of_message);  // return size_of_message
 	}
 	else {
-		printk(KERN_INFO "charDriver: Failed to send %d characters to the user\n", error_count);
 		mutex_unlock(&lock_mutex);
 		return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
 	}
@@ -127,7 +128,9 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 }
 
 /**
- * 
+ * Writes a string to the device.
+ * @return
+ * the length of the copied string.
  */
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
 	int i; // Initialized at top because of 
@@ -150,15 +153,15 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
 	}
 	
 	sprintf(message,"Time =%lu Chars=%d \n",time_since_last_newline, ret_val_number);
-	// appending received string with its length
     size_of_message = strlen(message);                 // store the length of the stored message
-    printk(KERN_INFO "charDriver: Received %zu characters from the user\n", len);
 	mutex_unlock(&lock_mutex);
     return len;
 }
 
 /** 
- * 
+ * Releases the driver object.
+ * @return
+ * 0 if successfull else -EBUSY
  */
 static int dev_release(struct inode *inodep, struct file *filep){
 	if (mutex_lock_interruptible(&lock_mutex)) 
@@ -172,7 +175,7 @@ static int dev_release(struct inode *inodep, struct file *filep){
 }
 
 /** 
- * 
+ * sets module init and exit functions
  */
 module_init(dev_init);
 module_exit(dev_exit);
