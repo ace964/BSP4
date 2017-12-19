@@ -26,7 +26,7 @@ static char   message[256] = {0};           ///< Memory for the string that is p
 static short  size_of_message;              ///< Used to remember the size of the string stored
 
 unsigned long ret_val_time = -1;
-unsigned long timeStampOfLastNL = 0; //holding timeStampOfLastNL
+unsigned long timeStampOfLastNL = -1; //holding timeStampOfLastNL
 int ret_val_number = -1;
 int currentNumberOfChars =0;
 module_param(ret_val_time, long, S_IRUGO);
@@ -35,7 +35,8 @@ module_param(ret_val_number, int, S_IRUGO);
 MODULE_PARM_DESC(ret_val_number, "Laenge zwischen zwei newline, wenn keine Messung bekannt ist");
 
 //flag to ensure only one opening
-static bool isOpen = false;
+static bool isRead = false;
+static bool isWrite = false;
 
 // The prototype functions for the character driver -- must come before the struct definition
 static int     dev_open(struct inode *, struct file *);
@@ -92,14 +93,51 @@ static int dev_open(struct inode *inodep, struct file *filep){
 	{
         return -EBUSY;
     }
-    if(isOpen)
-	{
-        return -EBUSY;
+        
+    if(filep -> f_mode & (FMODE_READ | FMODE_WRITE))
+    {
+        if(isRead | isWrite)
+        {
+            mutex_unlock(&lock_mutex);
+            return -EBUSY;
+        }else
+        {
+            isRead = true;
+            isWrite = true;
+            mutex_unlock(&lock_mutex);
+            return 0;
+        }
     }
     
-    isOpen = true;
-	mutex_unlock(&lock_mutex);
-    return 0;
+    if(filep -> f_mode & FMODE_READ)
+    {
+        if(isRead)
+        {
+            mutex_unlock(&lock_mutex);
+            return -EBUSY;
+        }else
+        {
+            isRead = true;
+            mutex_unlock(&lock_mutex);
+            return 0;
+        }
+    }
+    
+    if(filep -> f_mode & FMODE_WRITE)
+    {
+        if(isWrite)
+        {
+            mutex_unlock(&lock_mutex);
+            return -EBUSY;
+        }else
+        {
+            isWrite = true;
+            mutex_unlock(&lock_mutex);
+            return 0;
+        }
+    }
+    mutex_unlock(&lock_mutex);
+    return -EBUSY;
 }
 
 /** 
@@ -135,14 +173,21 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
  */
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset){
 	int i; // Initialized at top because of 
+	char m[1024] = {0};
+    int min = 1024;
 	if(mutex_lock_interruptible(&lock_mutex))
         return 0; // nothing copied
+    
 	
-	
+    if(len < 1024)
+    {
+        min = len;
+    }
+	copy_from_user(m, buffer, min);
 	
 	for(i = 0; i < len; i++)
 	{
-		if(buffer[i] == '\n')
+		if(m[i] == '\n')
 		{
 			if(timeStampOfLastNL != -1)
 			{
@@ -156,7 +201,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
         }
 	}
 	mutex_unlock(&lock_mutex);
-    return len;
+    return strlen(m);
 }
 
 /** 
@@ -169,10 +214,51 @@ static int dev_release(struct inode *inodep, struct file *filep){
 	{
         return -EBUSY;
     }
-	isOpen = false;
-	mutex_unlock(&lock_mutex);
-	printk(KERN_INFO "Device successfully closed\n");
-	return 0;
+    if(filep -> f_mode & (FMODE_READ | FMODE_WRITE))
+    {
+        if(!isRead | !isWrite)
+        {
+            mutex_unlock(&lock_mutex);
+            return -EBUSY;
+        }else
+        {
+            isRead = false;
+            isWrite = false;
+            mutex_unlock(&lock_mutex);
+            return 0;
+        }
+    }
+    
+    if(filep -> f_mode & FMODE_READ)
+    {
+        if(!isRead)
+        {
+            mutex_unlock(&lock_mutex);
+            return -EBUSY;
+        }else
+        {
+            isRead = false;
+            mutex_unlock(&lock_mutex);
+            return 0;
+        }
+    }
+    
+    if(filep -> f_mode & FMODE_WRITE)
+    {
+        if(!isWrite)
+        {
+            mutex_unlock(&lock_mutex);
+            return -EBUSY;
+        }else
+        {
+            isWrite = false;
+            mutex_unlock(&lock_mutex);
+            return 0;
+        }
+    }
+    
+    mutex_unlock(&lock_mutex);
+    return -EBUSY;
 }
 
 /** 
